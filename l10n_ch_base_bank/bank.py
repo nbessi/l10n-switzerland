@@ -20,7 +20,7 @@
 #
 ##############################################################################
 import re
-from openerp.osv import orm, fields
+from openerp import models, fields, api, _
 from openerp.tools import mod10r
 
 
@@ -52,19 +52,18 @@ class BankCommon(object):
         return True
 
 
-class Bank(orm.Model, BankCommon):
+class Bank(models.Model, BankCommon):
     """Inherit res.bank class in order to add swiss specific field"""
+
     _inherit = 'res.bank'
-    _columns = {
-        # Internal reference
-        'code': fields.char('Code', size=64, select=True),
-        # Swiss unik bank identifier also use in IBAN number
-        'clearing': fields.char('Clearing number', size=64),
-        # City of the bank
-        'city': fields.char('City', size=128, select=1),
-        # CCP of the bank
-        'ccp': fields.char('CCP', size=64, select=1)
-    }
+    # Internal reference
+    code = fields.Char(string='Code', size=64)
+    # Swiss unik bank identifier also use in IBAN number
+    clearing = fields.Char('Clearing number', size=64)
+    # City of the bank
+    city = fields.Char(string='City', size=128)
+    # Ccp of the bank
+    ccp = fields.Char(string='CCP', size=64)
 
     def _check_ccp_duplication(self, cursor, uid, ids):
         p_acc_obj = self.pool['res.partner.bank']
@@ -143,7 +142,7 @@ class Bank(orm.Model, BankCommon):
     ]
 
 
-class ResPartnerBank(orm.Model, BankCommon):
+class ResPartnerBank(models.Model, BankCommon):
     """
     Inherit res.partner.bank class in order to add swiss specific fields
     and state controls
@@ -151,41 +150,32 @@ class ResPartnerBank(orm.Model, BankCommon):
     """
     _inherit = 'res.partner.bank'
 
-    _columns = {
-        'name': fields.char('Description', size=128, required=True),
-        'bvr_adherent_num': fields.char(
-            'Bank BVR adherent number', size=11,
-            help="Your Bank adherent number to be printed "
-                 "in references of your BVR."
-                 "This is not a postal account number."
-        ),
-        'acc_number': fields.char(
-            'Account/IBAN Number',
-            size=64,
-            required=True
-        ),
-        'ccp': fields.related('bank', 'ccp', type='char', string='CCP',
-                              readonly=True),
-    }
+    bvr_adherent_num = fields.Char(
+        'Bank BVR adherent number', size=11,
+        help=("Your Bank adherent number to be printed in references of your BVR."
+            "This is not a postal account number.")
+        )
+    acc_number = fields.Char(string='Account/IBAN Number', size=64)
+    ccp = fields.Char(string='CCP', related='bank.ccp', store=True, readonly=True)
 
-    def get_account_number(self, cursor, uid, bid, context=None):
+    @api.model
+    def get_account_number(self, bid):
         if isinstance(bid, list):
             bid = bid[0]
-        current = self.browse(cursor, uid, bid, context=context)
-        if current.state not in ('bv', 'bvr'):
+        if self.state not in ('bv', 'bvr'):
             return current.acc_number
-        if current.bank and current.bank.ccp:
+        if self.bank and current.bank.ccp:
             return current.bank.ccp
         else:
             return current.acc_number
 
-    def _check_postal_num(self, cursor, uid, ids):
+    @api.multi
+    def _check_postal_num(self):
         """
         validate postal number format
         """
-        p_banks = self.browse(cursor, uid, ids)
-        for p_bank in p_banks:
-            if p_bank.state not in ('bv', 'bvr'):
+        for p_bank in self:
+            if not p_bank.state in ('bv', 'bvr'):
                 continue
             if not p_bank.get_account_number():
                 continue
@@ -196,14 +186,14 @@ class ResPartnerBank(orm.Model, BankCommon):
                 return False
         return True
 
-    def _check_ccp_duplication(self, cursor, uid, ids):
+    @api.multi
+    def _check_ccp_duplication(self):
         """
           Ensure that there is not a ccp in bank and res partner bank
           at same time
         """
-        p_banks = self.browse(cursor, uid, ids)
-        for p_bank in p_banks:
-            if p_bank.state not in ('bv', 'bvr'):
+        for p_bank in self:
+            if not p_bank.state in ('bv', 'bvr'):
                 continue
             bank_ccp = p_bank.bank.ccp if p_bank.bank else False
             if not bank_ccp:
@@ -233,5 +223,3 @@ class ResPartnerBank(orm.Model, BankCommon):
 
     _sql_constraints = [('bvr_adherent_uniq', 'unique (bvr_adherent_num)',
                          'The BVR adherent number must be unique !')]
-
-# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:
