@@ -18,7 +18,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-
-import base_sepa
-import l10n_ch
-import wizard
+from . import base_sepa
+from . import l10n_ch
+from . import wizard
