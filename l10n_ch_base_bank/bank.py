@@ -61,31 +61,29 @@ class Bank(models.Model, BankCommon):
     city = fields.Char(string='City', size=128, help="City of the bank")
     ccp = fields.Char(string='CCP', size=64, help="ccp of the bank")
 
-    def _check_ccp_duplication(self, cursor, uid, ids):
-        p_acc_obj = self.pool['res.partner.bank']
-        for bank in self.browse(cursor, uid, ids):
-            p_acc_ids = p_acc_obj.search(cursor, uid, [('bank', '=', bank.id)])
+    @api.constrains('acc_number', 'bank')
+    def _check_ccp_duplication(self):
+        p_acc_obj = self.env['res.partner.bank']
+        for bank in self:
+            p_acc_ids = p_acc_obj.search([('bank', '=', bank.id)])
             if p_acc_ids:
-                check = p_acc_obj._check_ccp_duplication(
-                    cursor,
-                    uid,
-                    p_acc_ids
-                )
+                check = p_acc_obj._check_ccp_duplication(p_acc_ids)
                 if not check:
-                    return False
+                    return Warning(_('You can not enter a ccp both on the bank and on an account'
+                                     ' of type BV, BVR'))
         return True
 
-    def _check_postal_num(self, cursor, uid, ids):
+    @api.constrains('ccp')
+    def _check_postal_num(self):
         """
         validate postal number format
         """
-        banks = self.browse(cursor, uid, ids)
-        for bank in banks:
+        for bank in self:
             if not bank.ccp:
                 continue
             if not (self._check_9_pos_postal_num(bank.ccp) or
                     self._check_5_pos_postal_num(bank.ccp)):
-                return False
+                return Warning(_('Please enter a correct postal number. (01-23456-1 or 12345)'))
         return True
 
     @api.multi
@@ -102,24 +100,27 @@ class Bank(models.Model, BankCommon):
     def name_search(self, name, args=None, operator='ilike', limit=80):
         if args is None:
             args = []
-        if context is None:
-            context = {}
         ids = []
         cols = ('code', 'bic', 'name', 'street', 'city')
         if name:
             for val in name.split(' '):
                 for col in cols:
+<<<<<<< HEAD
                     tmp_ids = self.search(
                         cursor,
                         uid,
                         [(col, 'ilike', val)] + args,
                         limit=limit
                     )
+=======
+                    tmp_ids = self.search([(col, 'ilike', val)] + args, limit=limit)
+>>>>>>> 430cb6d... [IMP] Added new API constraints and further migration of l10n_ch_base_bank
                     if tmp_ids:
-                        ids += tmp_ids
+                        ids += tmp_ids.ids
                         break
         # we sort by occurence
         to_ret_ids = list(set(ids))
+<<<<<<< HEAD
         to_ret_ids = sorted(
             to_ret_ids,
             key=lambda x: ids.count(x),
@@ -139,6 +140,11 @@ class Bank(models.Model, BankCommon):
          ['acc_number', 'bank'])
     ]
 
+=======
+        to_ret_ids = sorted(to_ret_ids, key=lambda x: ids.count(x), reverse=True)
+        self._ids = to_ret_ids
+        return self.name_get()
+>>>>>>> 430cb6d... [IMP] Added new API constraints and further migration of l10n_ch_base_bank
 
 class ResPartnerBank(models.Model, BankCommon):
     """
@@ -156,9 +162,7 @@ class ResPartnerBank(models.Model, BankCommon):
     ccp = fields.Char(string='CCP', related='bank.ccp', store=True, readonly=True)
 
     @api.model
-    def get_account_number(self, bid):
-        if isinstance(bid, list):
-            bid = bid[0]
+    def get_account_number(self):
         if self.state not in ('bv', 'bvr'):
             return self.acc_number
         if self.bank and self.bank.ccp:
@@ -166,7 +170,7 @@ class ResPartnerBank(models.Model, BankCommon):
         else:
             return self.acc_number
 
-    @api.multi
+    @api.constrains('acc_number')
     def _check_postal_num(self):
         """
         validate postal number format
@@ -176,14 +180,20 @@ class ResPartnerBank(models.Model, BankCommon):
                 continue
             if not p_bank.get_account_number():
                 continue
+<<<<<<< HEAD
             acc = p_bank.get_account_number()
             if not (
                     self._check_9_pos_postal_num(acc) or
                     self._check_5_pos_postal_num(acc)):
                 return False
         return True
+=======
+            if not (self._check_9_pos_postal_num(p_bank.get_account_number()) or
+                    self._check_5_pos_postal_num(p_bank.get_account_number())):
+                raise Warning(_('Please enter a correct postal number. (01-23456-1 or 12345)'))
+>>>>>>> 430cb6d... [IMP] Added new API constraints and further migration of l10n_ch_base_bank
 
-    @api.multi
+    @api.constrains('acc_number', 'bank')
     def _check_ccp_duplication(self):
         """
           Ensure that there is not a ccp in bank and res partner bank
@@ -204,6 +214,7 @@ class ResPartnerBank(models.Model, BankCommon):
                 self._check_9_pos_postal_num(p_bank.bank.ccp)
             )
             if part_bank_check and bank_check:
+<<<<<<< HEAD
                 return False
         return True
 
@@ -217,6 +228,10 @@ class ResPartnerBank(models.Model, BankCommon):
          ' of type BV, BVR',
          ['acc_number', 'bank'])
     ]
+=======
+                raise Warning(_('You can not enter a ccp both on the bank and on an account'
+                                ' of type BV, BVR'))
+>>>>>>> 430cb6d... [IMP] Added new API constraints and further migration of l10n_ch_base_bank
 
     _sql_constraints = [('bvr_adherent_uniq', 'unique (bvr_adherent_num)',
                          'The BVR adherent number must be unique !')]
